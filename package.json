@@ -2,10 +2,19 @@
   "name": "mern-backendproject",
   "version": "1.0.0",
   "description": "This is my first backend project.",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/index.js"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "Dharmik Kansara",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "mongoose": "^9.2.4"
+  }
 }
