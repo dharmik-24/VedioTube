@@ -1,9 +1,9 @@
-import mongoose, {schema} from "mongoose"
+import mongoose from "mongoose"
 import jwt from "jsonwebtoken";
-import bcrypt from "bcypt";
+import bcrypt from "bcrypt";
 
 
-const userSchema = new schema({
+const userSchema = new mongoose.Schema({
     userName: {
         type: String,
         required: [true, "UserName is must"],
@@ -31,7 +31,7 @@ const userSchema = new schema({
         required: true
     },
     coverImage: {
-        type: string
+        type: String
     },
     watchHistory: [
         {
@@ -40,20 +40,30 @@ const userSchema = new schema({
         }
     ],
     password: {
-        type: string,
+        type: String,
         required: [true, "Password is required"]
+    },
+    refreshToken: {
+        type: String
     }
 
 
-}, {timestamps: "true"})
+}, {timestamps: true})
 
 
 
-userSchema.pre("save", async function(next){
-    if(!this.isModified("password")) return next();
-    this.password = await bcrypt.hash(this.password , 10)
-    next()
+userSchema.pre("save", async function () {
+    if(!this.isModified("password")) return;
+
+    this.password = await bcrypt.hash(this.password, 10)
+
 })
+//Why we have used function() instead of arrow function here?? BCS we want to use this keyword here and this keyword in arrow function is not defined it will give us undefined error...
+//There are 2 styles of middleware : 
+//(1) callback Style : function(next) { next() }
+//(2) Promise Style : async function() { await something() }
+//mongoose automatically waits for the promise to resolve before moving to the next middleware in the stack. So we can use async-await in mongoose middleware without any problem.
+//Here we are using promise style middleware and in this style.
 
 userSchema.methods.isPasswordCorrect = async function(password){
     return await bcrypt.compare(password, this.password)

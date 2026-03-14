@@ -4,7 +4,28 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import {User} from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
-//Steps to register a user ::
+const generateAccessAndRefreshToken = async (userId) => {
+    //Generalized method for generating access and refresh tokens...
+    try {
+
+        const user = await User.findOne(userId)
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+        
+        //Now add refreshtoken to the databse of that user...
+        user.refreshToken = refreshToken
+        await user.save({ validateBeforeSave : false }) //After doing .save() all fields are updated and we have validation on some fields like password etc.. 
+        // And here we only want to update refreshtoken field so we have done this  
+
+        return {accessToken , refreshToken}
+    } catch (error) {
+        throw new ApiError(500, "Something went wrong while generating access and refresh tokens")
+    } 
+}
+
+
+const registerUser = asyncHandler(async (req , res) => {
+    //Steps to register a user ::
     // get user details from frontend
     // validation - not empty
     // check if user already exists: username, email
@@ -14,15 +35,15 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
     // remove password and refresh token field from response
     // check for user creation
     // return res
-const registerUser = asyncHandler(async (req , res) => {
+
     
     //Getting data from request
-    const{email, fullName, userName, password}= req.body;
+    const {email, fullName, userName, password} = req.body;
     //avatar and coverimage cant be taken directly
 
     // validation - not empty
     if(
-        [email , userName , fullName , password].some((field) => { field?.trim() === ""})
+        [email , userName , fullName , password].some(field => { field?.trim() === ""})
     ){
         throw new ApiError(400, "All fields are required") 
     }
@@ -31,7 +52,7 @@ const registerUser = asyncHandler(async (req , res) => {
 
     // check if user already exists: username, email
     //Here we are checking if either username or email already exists or not...
-    const existedUser = User.findOne({
+    const existedUser = await User.findOne({
         $or : [{userName} , {email}]
     })
     if(existedUser){
@@ -40,16 +61,22 @@ const registerUser = asyncHandler(async (req , res) => {
 
     // check for images, check for avatar
     const avatarLocalPath = req.files?.avatar[0]?.path
-    const coverImageLocalPath = req.files?.coverImage[0]?.path
+    // const coverImageLocalPath = req.files?.coverImage[0]?.path
+    //Here if we will not give cover image from input(bcs it is optional) then above line gives error : cannot read properties of undefined
+    //For solving this we will check by the following code ::
+    let coverImageLocalPath;
+    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length>0)
+    {
+        coverImageLocalPath = req.files?.coverImage[0]?.path    
+    }
 
-    if(!avatarLocalPath){
+    if(!avatarLocalPath){       
         throw new ApiError(400 , "Avatar file is required")
     }
 
     // upload them to cloudinary
-    const avatar = uploadOnCloudinary(avatarLocalPath)
-    const coverImage = uploadOnCloudinary(coverImageLocalPath)
-
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
     //Now check whether avatar is uploaded on cloudinary or not
     //BCS avatar is required field in the databse
     //Agar avatar upload nahi hua hinga to database pakka fatega !!!!
@@ -58,17 +85,17 @@ const registerUser = asyncHandler(async (req , res) => {
     }
 
     // create user object - create entry in db
-    const user = User.create({
+    const user = await User.create({
         fullName,
         email,
         password,
-        userName : userName.tolowercase(),
+        userName : userName.toLowerCase(),
         avatar : avatar.url,
-        coverImage : coverImage.url
+        coverImage : coverImage.url || ""
     })
 
     //check for user creation
-    const createdUser = User.findById(user._id).select(
+    const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
     )
     //This code finds user by id..
@@ -79,10 +106,67 @@ const registerUser = asyncHandler(async (req , res) => {
     }
 
     //return resonse
-    return res.status(200).json(
+    return res.status(201).json(
         new ApiResponse(200 , createdUser, "User registered successfully")
     )
 })
 
+const loginUser = asyncHandler(async (req , res) => {
 
-export { registerUser };
+//Steps for login the user :: 
+    //req.body => data needed for login the user 
+    //Find the user 
+    //Check the password 
+    //Access and Refresh tookens
+    //send in cookies 
+    //send response
+
+    //req.body => data needed for login the user 
+    const {email , password} = req.body()
+    if(!email)
+    {
+        throw new ApiError(400, "Email is required for login")
+    }
+    if(!password)
+    {
+        throw new ApiError(400, "Password is required for login")
+    }
+
+    //Find the user
+    const user = await User.findOne({email})
+    if(!user){
+        throw new ApiError(404, "User Does not exist")
+    }
+
+    //Check Password 
+    const checkPassword = await user.isPasswordCorrect(password)
+    if(!checkPassword){
+        throw new error(401, "Wrong User Credentials")
+    }
+
+    //generate access and refresh tokens 
+    const {accessToken , refreshToken} = await generateAccessAndRefreshToken(user._id)
+
+    //We can not send this user in response bcs it contains all fields. We want that refreshtokens and passwords are removed...
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+
+    //Add into cookies and send response...
+    const options = {           //This indicate that only serverside cookies can be modified and not on the frontend side...
+        httpOnly : true,
+        secure : true
+    }
+    res.status(200)
+    .cookies("accessToken", accessToken, options)
+    .cookies("refreshToken", refreshToken, options)
+    .json(
+        new ApiResponse(
+            200, 
+            {
+                user : loggedInUser , refreshToken , accessToken
+            },
+            "User Logged In Successfully"
+        )
+    )
+})
+
+export { registerUser , loginUser };
