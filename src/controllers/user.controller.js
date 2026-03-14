@@ -169,4 +169,44 @@ const loginUser = asyncHandler(async (req , res) => {
     )
 })
 
-export { registerUser , loginUser };
+const logoutUser = asyncHandler(async (req , res) => {
+    //To logout current user we can do User.findById(id) but from where do we get the id of current user ??
+    //For logout we need user info and pata karna padega ki user authenticated hei ya nahi...For that we will make a middleware aith.middleware.js...
+    
+//     Logout Controller Flow:
+// 1. Identify user using req.user._id (from verifyJWT middleware)
+// 2. Remove refreshToken from database using $unset
+// 3. Clear accessToken and refreshToken cookies
+// 4. Send success response
+
+    // Remove refreshToken from the user's document in the database
+    // req.user._id comes from verifyJWT middleware
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $unset: {
+                refreshToken: 1 // $unset removes the field from the document
+            }
+        },
+        {
+            new: true // return the updated document
+        }
+    )
+
+    // Cookie options used while clearing cookies
+    // httpOnly → prevents client-side JavaScript from accessing the cookie (security)
+    // secure → cookie is sent only over HTTPS
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+
+    // Send response after clearing accessToken and refreshToken cookies
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)   // remove access token cookie
+    .clearCookie("refreshToken", options)  // remove refresh token cookie
+    .json(new ApiResponse(200, {}, "User logged Out")) // success response
+
+})
+export { registerUser , loginUser , logoutUser};
