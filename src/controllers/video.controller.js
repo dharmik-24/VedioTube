@@ -13,6 +13,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { Video } from "../models/video.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import mongoose from "mongoose"
+
 
 const getAllVideos = asyncHandler(async (req , res) =>{
     
@@ -20,8 +22,8 @@ const getAllVideos = asyncHandler(async (req , res) =>{
         page = 1,   //Total pages
         limit = 10, //video limits per page
         query = "",
-        sortBy = createdAt,
-        sortType = desc
+        sortBy = "createdAt",
+        sortType = "desc"
     } = req.query;
 
     const matchstage = {
@@ -95,11 +97,11 @@ const getAllVideos = asyncHandler(async (req , res) =>{
 
 const publishVideo = asyncHandler(async (req , res) =>{
 
-    const {title , desciption} = req.body;
+    const {title , description} = req.body;
     if(!title){
         throw new ApiError(400 , "Please Provide Title of the Video")
     }
-    if(!desciption){
+    if(!description){
         throw new ApiError(400 , "Please Provide Description of the Video")
     }
 
@@ -177,7 +179,7 @@ const getVideoById = asyncHandler(async (req , res) => {
     video = await Video.aggregate([
         {
             $match: {
-                _id: new mongoose.Types.ObbjectId(videoId)
+                _id: new mongoose.Types.ObjectId(videoId)
             }
         },
         {
@@ -271,7 +273,7 @@ const updateVideo = asyncHandler(async (req, res) => {
         throw new ApiError(400 , "Descrption Field is reqiured")
     }
     if(!newThumbnailLocalPath){
-        throw new ApiError(400 , "Thumbnai is reqiured")
+        throw new ApiError(400 , "Thumbnail is reqiured")
     }
 
     const video = await Video.findById(videoId)
@@ -387,4 +389,5 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
       )
     );
 });
+
 export {publishVideo , getAllVideos , getVideoById , updateVideo , deleteVideo , togglePublishStatus}
