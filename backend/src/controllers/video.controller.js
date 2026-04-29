@@ -12,6 +12,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { Video } from "../models/video.model.js";
+import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose from "mongoose"
 
@@ -19,16 +20,24 @@ import mongoose from "mongoose"
 const getAllVideos = asyncHandler(async (req , res) =>{
     
     const {
-        page = 1,   //Total pages
-        limit = 10, //video limits per page
+        page = 1,
+        limit = 10,
         query = "",
         sortBy = "createdAt",
-        sortType = "desc"
+        sortType = "desc",
+        userId
     } = req.query;
 
     const matchstage = {
-        isPublished: true,
-        title: { $regex: query , $options: "i"}
+        isPublished: true
+    };
+    
+    if (query && query.trim() !== "") {
+        matchstage.title = { $regex: query, $options: "i" };
+    }
+    
+    if (userId) {
+        matchstage.owner = new mongoose.Types.ObjectId(userId);
     }
 
     const totalVideos = await Video.countDocuments(matchstage)
@@ -48,7 +57,7 @@ const getAllVideos = asyncHandler(async (req , res) =>{
                     {
                         $project: {
                             fullName: true,
-                            username: true,
+                            userName: true,
                             avatar: true
                         }
                     }
@@ -76,9 +85,7 @@ const getAllVideos = asyncHandler(async (req , res) =>{
 
     ])
 
-    if(!videos?.length){
-        throw new ApiError(404, "No Viddeos Found")
-    }
+
 
     return res.status(200)
     .json(
@@ -169,14 +176,28 @@ const getVideoById = asyncHandler(async (req , res) => {
     if(!videoId){
         throw new ApiError(400 , "Give a valid Video ID")
     }
-    //Increse the views by one
-    //$incr is a atomic operation which will be helpful in concurrent operations.(when multiple users are watching a video at the same time)
-    let video = await Video.updateOne(
-        {_id: new mongoose.Types.ObjectId(videoId)},
-        {$inc: {views: 1}}
-    )
+    // Increase the views only if the user hasn't seen the video yet
+    const user = await User.findById(req.user?._id);
+    const hasWatched = user?.watchHistory.some(id => id.toString() === videoId);
 
-    video = await Video.aggregate([
+    if (!hasWatched) {
+        await Video.updateOne(
+            {_id: new mongoose.Types.ObjectId(videoId)},
+            {$inc: {views: 1}}
+        )
+
+        // Add to user watch history
+        await User.findByIdAndUpdate(
+            req.user?._id,
+            {
+                $addToSet: {
+                    watchHistory: videoId
+                }
+            }
+        )
+    }
+
+    let video = await Video.aggregate([
         {
             $match: {
                 _id: new mongoose.Types.ObjectId(videoId)
@@ -191,7 +212,7 @@ const getVideoById = asyncHandler(async (req , res) => {
                 pipeline: [
                     {
                         $project: {
-                            username: true,
+                            userName: true,
                             fullName: true,
                             avatar: true
                         }

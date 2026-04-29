@@ -478,7 +478,10 @@ const getUserChannelProfile = asyncHandler(async (req , res) => {
     const channel = await User.aggregate([
         {
             $match : {
-                userName : userName?.toLowerCase()
+                $or: [
+                    { userName : userName?.toLowerCase() },
+                    { _id: mongoose.isValidObjectId(userName) ? new mongoose.Types.ObjectId(userName) : null }
+                ]
             }
         },
         {
@@ -606,7 +609,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                                     {
                                         $project: {
                                             fullName: 1,
-                                            username: 1,
+                                            userName: 1,
                                             avatar: 1
                                         }
                                     }

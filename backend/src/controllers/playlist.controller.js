@@ -62,8 +62,8 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
             // projecting user details
             {
                 $project: {
-                username: 1,
-                fullname: 1,
+                userName: 1,
+                fullName: 1,
                 avatar: 1,
                 },
             },
@@ -96,8 +96,8 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
                 pipeline: [
                     {
                     $project: {
-                        username: 1,
-                        fullname: 1,
+                        userName: 1,
+                        fullName: 1,
                         avatar: 1,
                     },
                     },
@@ -171,8 +171,8 @@ const getPlaylistById = asyncHandler(async (req, res) => {
             // projecting user details
             {
                 $project: {
-                username: 1,
-                fullname: 1,
+                userName: 1,
+                fullName: 1,
                 avatar: 1,
                 },
             },
@@ -205,8 +205,8 @@ const getPlaylistById = asyncHandler(async (req, res) => {
                 pipeline: [
                     {
                     $project: {
-                        username: 1,
-                        fullname: 1,
+                        userName: 1,
+                        fullName: 1,
                         avatar: 1,
                     },
                     },
@@ -247,13 +247,13 @@ const getPlaylistById = asyncHandler(async (req, res) => {
         },
     ]);
 
-    if (!playlistById) {
+    if (!playlistById || playlistById.length === 0) {
         throw new ApiError(400, "No playlist found");
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, playlistById, "playlist fetched successfully"));
+        .json(new ApiResponse(200, playlistById[0], "playlist fetched successfully"));
 });
 
 const addVideoToPlaylist = asyncHandler(async (req, res) => {

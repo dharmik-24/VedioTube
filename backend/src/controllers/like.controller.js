@@ -177,8 +177,8 @@ const getLikedVideos = asyncHandler(async (req, res) => {
                 pipeline: [
                     {
                     $project: {
-                        username: 1,
-                        fullname: 1,
+                        userName: 1,
+                        fullName: 1,
                         avatar: 1,
                     },
                     },
@@ -229,4 +229,82 @@ const getLikedVideos = asyncHandler(async (req, res) => {
         );
 });
 
-export { toggleCommentLike, toggleTweetLike, toggleVideoLike, getLikedVideos };
+const getLikedTweets = asyncHandler(async (req, res) => {
+    const userID = req.user?._id;
+
+    const likedTweets = await Like.aggregate([
+        {
+            $match: {
+                likedBy: userID,
+                tweet: {
+                    $exists: true,
+                    $ne: null,
+                },
+            },
+        },
+        {
+            $lookup: {
+                from: "tweets",
+                localField: "tweet",
+                foreignField: "_id",
+                as: "tweet",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        userName: 1,
+                                        fullName: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner",
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            content: 1,
+                            owner: 1,
+                            createdAt: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $unwind: {
+                path: "$tweet",
+            },
+        },
+        {
+            $project: {
+                tweet: 1,
+                likedBy: 1,
+            },
+        },
+    ]);
+
+    if (!likedTweets) {
+        throw new ApiError(400, "Failed to fetch liked tweets");
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, likedTweets, "Successfully fetched liked tweets")
+        );
+});
+
+export { toggleCommentLike, toggleTweetLike, toggleVideoLike, getLikedVideos, getLikedTweets };

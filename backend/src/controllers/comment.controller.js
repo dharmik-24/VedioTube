@@ -7,146 +7,145 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 const getVideoComments = asyncHandler(async (req, res) => {
 
-    const { videoId } = req.params;
+  const { videoId } = req.params;
 
-    const {
-        page = 1,
-        limit = 10,
-        sortBy = "createdAt",
-        sortType = "desc",
-    } = req.query;
+  const {
+    page = 1,
+    limit = 10,
+    sortBy = "createdAt",
+    sortType = "desc",
+  } = req.query;
 
-    // console.log("query", req.query);
+  // console.log("query", req.query);
 
-    if (!videoId || !isValidObjectId(videoId)) {
-        return new ApiError(400, "Missing or Invalid video ID");
-    }
+  if (!videoId || !isValidObjectId(videoId)) {
+    return new ApiError(400, "Missing or Invalid video ID");
+  }
 
-    const video = await Video.findById(videoId);
-    if (!video) {
-        throw new ApiError(400, "No such video found");
-    }
+  const video = await Video.findById(videoId);
+  if (!video) {
+    throw new ApiError(400, "No such video found");
+  }
 
-    const pipeline = [
-        // match the comments of the video
-        {
-            $match: {
-                video: new mongoose.Types.ObjectId(videoId),
+  const pipeline = [
+    // match the comments of the video
+    {
+      $match: {
+        video: new mongoose.Types.ObjectId(videoId),
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "createdBy",
+        pipeline: [
+          {
+            $project: {
+              userName: 1,
+              fullName: 1,
+              avatar: 1,
             },
+          },
+        ],
+      },
+    },
+    {
+      $addFields: {
+        createdBy: {
+          $first: "$createdBy",
         },
-        {
-        $lookup: {
-            from: "users",
-            localField: "owner",
-            foreignField: "_id",
-            as: "createdBy",
-            pipeline: [
-            {
-                $project: {
-                username: 1,
-                fullname: 1,
-                avatar: 1,
-                },
-            },
-            ],
-        },
-        },
-        {
-        $addFields: {
-            createdBy: {
-            $first: "$createdBy",
-            },
-        },
-        },
-        {
-        $unwind: "$createdBy",
-        },
-        {
-        $sort: {
-            [sortBy]: sortType === "asc" ? 1 : -1,
-        },
-        },
-        {
-        $project: {
-            content: 1,
-            createdBy: 1,
-            updatedAt: 1,
-        },
-        },
-    ];
+      },
+    },
+    {
+      $unwind: "$createdBy",
+    },
+    {
+      $sort: {
+        [sortBy]: sortType === "asc" ? 1 : -1,
+      },
+    },
+    {
+      $project: {
+        content: 1,
+        createdBy: 1,
+        updatedAt: 1,
+        createdAt: 1,
+      },
+    },
+  ];
 
-    const options = {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pagination: true,
-    };
+  const options = {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    pagination: true,
+  };
 
-    const aggregateQuery = Comment.aggregate(pipeline);
+  const aggregateQuery = Comment.aggregate(pipeline);
 
-    if (!aggregateQuery) {
-        return next(new ApiError(404, "no comments found fot this video"));
-    }
+  if (!aggregateQuery) {
+    return next(new ApiError(404, "no comments found fot this video"));
+  }
 
-    const result = await Comment.aggregatePaginate(aggregateQuery, options);
+  const result = await Comment.aggregatePaginate(aggregateQuery, options);
 
-    if (!result || result.docs?.length === 0) {
-        throw new ApiError(404, "No comments found for this video");
-    }
 
-    return res.status(200).json(
-        new ApiResponse(
-        200,
-        {
-            totalDocs: result.totalDocs,
-            count: result.docs?.length,
-            totalComments: result.docs,
-            totalPages: result.totalPages,
-            currentPage: result.page,
-            hasNextPage: result.hasNextPage,
-            hasPrevPage: result.hasPrevPage,
-            nextPage: result.nextPage,
-            prevPage: result.prevPage,
-            pagingCounter: result.pagingCounter,
-        },
-        "Comments fetched successfully"
-        )
-    );
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        totalDocs: result.totalDocs,
+        count: result.docs?.length,
+        totalComments: result.docs,
+        totalPages: result.totalPages,
+        currentPage: result.page,
+        hasNextPage: result.hasNextPage,
+        hasPrevPage: result.hasPrevPage,
+        nextPage: result.nextPage,
+        prevPage: result.prevPage,
+        pagingCounter: result.pagingCounter,
+      },
+      "Comments fetched successfully"
+    )
+  );
 });
 
 const addComment = asyncHandler(async (req, res) => {
 
-    const { videoId } = req.params;
-    const { comment } = req.body;
+  const { videoId } = req.params;
+  const { comment } = req.body;
 
-    const userID = req.user._id;
+  const userID = req.user._id;
 
-    if (!videoId || !isValidObjectId(videoId)) {
-        throw new ApiError(400, "Missing or Invalid video ID");
-    }
+  if (!videoId || !isValidObjectId(videoId)) {
+    throw new ApiError(400, "Missing or Invalid video ID");
+  }
 
-    if (!comment || comment.trim() === "") {
-        throw new ApiError(400, "Please write something for comment");
-    }
+  if (!comment || comment.trim() === "") {
+    throw new ApiError(400, "Please write something for comment");
+  }
 
-    const video = await Video.findById(videoId);
+  const video = await Video.findById(videoId);
 
-    if (!video) {
-        throw new ApiError(400, "Video does not exits");
-    }
+  if (!video) {
+    throw new ApiError(400, "Video does not exits");
+  }
 
-    const newComment = await Comment.create({
-        content: comment,
-        video: videoId,
-        owner: userID,
-    });
+  const newComment = await Comment.create({
+    content: comment,
+    video: videoId,
+    owner: userID,
+  });
 
-    if (!newComment) {
-        throw new ApiError(400, "Failed to create a comment");
-    }
+  if (!newComment) {
+    throw new ApiError(400, "Failed to create a comment");
+  }
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, newComment, "Comment added"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, newComment, "Comment added"));
 });
 
 const updateComment = asyncHandler(async (req, res) => {
@@ -157,7 +156,8 @@ const updateComment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing or Invalid comment Id");
   }
 
-  const { content } = req.body;
+  let { content, comment: commentContent } = req.body;
+  content = content || commentContent;
 
   if (!content) {
     throw new ApiError(400, "Provide a content for comment");

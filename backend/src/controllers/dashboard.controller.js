@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Video } from "../models/video.model.js";
 import { Subscription } from "../models/subscription.model.js";
 import { Like } from "../models/like.model.js";
+import { Tweet } from "../models/tweet.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -18,7 +19,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
     },
     {
       $group: {
-        _id: "$videoFile",
+        _id: null,
         totalViews: {
           $sum: "$views",
         },
@@ -88,11 +89,65 @@ const getChannelStats = asyncHandler(async (req, res) => {
     },
   ]);
 
+  const tweetLikeCount = await Like.aggregate([
+    {
+      $lookup: {
+        from: "tweets",
+        localField: "tweet",
+        foreignField: "_id",
+        as: "tweetInfo",
+      },
+    },
+    {
+      $match: {
+        "tweetInfo.owner": userId,
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalLikes: {
+          $sum: 1,
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        totalLikes: 1,
+      },
+    },
+  ]);
+
+  const tweetCount = await Tweet.aggregate([
+    {
+      $match: {
+        owner: new mongoose.Types.ObjectId(userId),
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalTweets: {
+          $sum: 1,
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        totalTweets: 1,
+      },
+    },
+  ]);
+
   const info = {
     totalViews: videoCount[0]?.totalViews ? videoCount[0].totalViews : 0,
     totalVideos: videoCount[0]?.totalVideos ? videoCount[0].totalVideos : 0,
     totalSubscribers: subscribersCount[0]?.totalSubscribers ? subscribersCount[0].totalSubscribers : 0,
-    totalLikes: likeCount[0]?.totalLikes ? likeCount[0].totalLikes : 0,
+    totalVideoLikes: likeCount[0]?.totalLikes ? likeCount[0].totalLikes : 0,
+    totalTweetLikes: tweetLikeCount[0]?.totalLikes ? tweetLikeCount[0].totalLikes : 0,
+    totalTweets: tweetCount[0]?.totalTweets ? tweetCount[0].totalTweets : 0,
   };
 
   return res
@@ -132,7 +187,7 @@ const getChannelVideos = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(200, videos[0] ? videos[0] : 0, "Channel videos fetched")
+      new ApiResponse(200, videos, "Channel videos fetched")
     );
 });
 

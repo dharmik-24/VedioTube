@@ -36,9 +36,9 @@ const getSubscribedChannelsAggregate = async (subscriberId) => {
           {
             $project: {
               _id: 1,
-              fullname: 1,
+              fullName: 1,
               avatar: 1,
-              username: 1,
+              userName: 1,
             },
           },
         ],
@@ -116,34 +116,47 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
 
     const subscribersList = await Subscription.aggregate([
         {
-        $match: {
-            channel:new mongoose.Types.ObjectId(channelId),
-        },
-        },
-        {
-        $group: {
-            _id: "$channel",
-            subscribersCount: {
-            $sum: 1,
+            $match: {
+                channel: new mongoose.Types.ObjectId(channelId),
             },
         },
+        {
+            $lookup: {
+                from: "users",
+                localField: "subscriber",
+                foreignField: "_id",
+                as: "subscriberDetails",
+                pipeline: [
+                    {
+                        $project: {
+                            userName: 1,
+                            fullName: 1,
+                            avatar: 1
+                        }
+                    }
+                ]
+            }
         },
         {
-        $project: {
-            subscribersCount: 1,
-            channel: 1,
+            $addFields: {
+                subscriberDetails: {
+                    $first: "$subscriberDetails"
+                }
+            }
         },
-        },
+        {
+            $replaceRoot: {
+                newRoot: "$subscriberDetails"
+            }
+        }
     ]);
-
-    const subscriberCount = subscribersList.length > 0 ? subscribersList[0] : 0;
 
     return res
         .status(200)
         .json(
         new ApiResponse(
             200,
-            { subscriberCount },
+            subscribersList,
             "Subscribers fetched successfully"
         )
         );
@@ -178,8 +191,8 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
         pipeline: [
           {
             $project: {
-              username: 1,
-              fullname: 1,
+              userName: 1,
+              fullName: 1,
               avatar: 1
             },
           },
@@ -194,22 +207,18 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
       },
     },
     {
-      $project: {
-        channelDetails: 1,
-      },
-    },
+      $replaceRoot: {
+        newRoot: "$channelDetails"
+      }
+    }
   ]);
-
-  if (!subscribedChannels?.length) {
-    throw new ApiError(404, "No subscribers yet");
-  }
 
   return res
     .status(200)
     .json(
       new ApiResponse(
         200,
-        { totalCount, channels: subscribedChannels },
+        subscribedChannels,
         "Subscribed channels fetched successfully"
       )
     );
