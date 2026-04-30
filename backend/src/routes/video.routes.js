@@ -5,11 +5,13 @@ import { deleteVideo, getAllVideos, getVideoById, publishVideo, updateVideo, tog
 
 const router = Router();
 
-router.use(verifyJWT) //Use VerfyJWT for all routes
-
+router.use(verifyJWT) //Use VerfyJWT for all other routes
 
 router.route("/")
 .get(getAllVideos)
+
+
+router.route("/")
 .post(
     upload.fields([
         {
