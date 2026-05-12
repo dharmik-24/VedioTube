@@ -288,7 +288,7 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
             videos: videoId,
         },
         },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!updatedPlaylist) {
@@ -339,7 +339,7 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
             videos: videoId,
         },
         }, // pull to remove the video ID
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!updatedPlaylist) {
@@ -409,7 +409,7 @@ const updatePlaylist = asyncHandler(async (req, res) => {
             description,
         },
         },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!updatedPlaylist) {

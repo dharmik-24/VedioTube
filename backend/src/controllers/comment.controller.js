@@ -182,7 +182,7 @@ const updateComment = asyncHandler(async (req, res) => {
         content,
       },
     },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updatedComment) {

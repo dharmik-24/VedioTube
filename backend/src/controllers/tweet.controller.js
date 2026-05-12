@@ -188,7 +188,7 @@ const updateTweet = asyncHandler(async (req, res) => {
         content,
       },
     },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updateTweet) {

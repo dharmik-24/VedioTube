@@ -15,6 +15,14 @@ import { Video } from "../models/video.model.js";
 import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose from "mongoose"
+import {
+    cleanupFile,
+    extractAudio,
+    generateSummaryWithGemini,
+    generateTranscriptWithGemini,
+    SUMMARY_FAILURE_REASONS,
+    VideoSummaryError
+} from "../services/videoSummary.service.js";
 
 
 const getAllVideos = asyncHandler(async (req , res) =>{
@@ -328,7 +336,7 @@ const updateVideo = asyncHandler(async (req, res) => {
             }
         },
         {
-            new: true
+            returnDocument: 'after'
         }
     )
     
@@ -397,7 +405,7 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
         isPublished: !video.isPublished,
       },
     },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   return res
@@ -411,4 +419,107 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     );
 });
 
-export {publishVideo , getAllVideos , getVideoById , updateVideo , deleteVideo , togglePublishStatus}
+const summarizeVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) {
+        return res.status(400).json({
+            success: false,
+            reason: SUMMARY_FAILURE_REASONS.INVALID_VIDEO_URL,
+            message: "Video source could not be processed."
+        });
+    }
+
+    const video = await Video.findById(videoId);
+
+    if (!video) {
+        return res.status(404).json({
+            success: false,
+            reason: SUMMARY_FAILURE_REASONS.INVALID_VIDEO_URL,
+            message: "Video source could not be processed."
+        });
+    }
+
+    //Return Summary if already exists in database...(Type of caching)
+    if (video.summary?.trim()) {
+        return res.status(200).json({
+            success: true,
+            summary: video.summary,
+            transcriptLength: video.transcript?.length || 0
+        });
+    }
+
+    let extractedAudioPath = "";
+
+    try {
+        video.summaryStatus = "processing";
+        await video.save({ validateBeforeSave: false });
+
+        extractedAudioPath = await extractAudio(video.videoFile?.url, video._id.toString());
+        const transcript = await generateTranscriptWithGemini(extractedAudioPath);
+
+        if (!transcript.trim()) {
+            throw new VideoSummaryError(
+                SUMMARY_FAILURE_REASONS.EMPTY_TRANSCRIPT,
+                "Transcript could not be generated from the video.",
+                400
+            );
+        }
+
+        const summary = await generateSummaryWithGemini(transcript);
+
+        if (!summary.trim()) {
+            throw new VideoSummaryError(
+                SUMMARY_FAILURE_REASONS.AI_SERVICE_ERROR,
+                "AI summary service is currently unavailable.",
+                503
+            );
+        }
+
+        video.transcript = transcript;
+        video.summary = summary;
+        video.summaryStatus = "completed";
+        await video.save({ validateBeforeSave: false });
+
+        return res.status(200).json({
+            success: true,
+            summary,
+            transcriptLength: transcript.length
+        });
+    } catch (error) {
+        console.error(
+            "Video summary generation failed:",
+            error?.reason || "UNKNOWN_REASON",
+            error?.message || error,
+            error?.cause?.message ? `| cause: ${error.cause.message}` : ""
+        );
+
+        await Video.findByIdAndUpdate(
+            videoId,
+            {
+                $set: {
+                    summaryStatus: "failed"
+                }
+            },
+            { returnDocument: 'after' }
+        );
+
+        if (error instanceof VideoSummaryError) {
+            return res.status(error.statusCode || 500).json({
+                success: false,
+                reason: error.reason,
+                message: error.message
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            reason: SUMMARY_FAILURE_REASONS.INTERNAL_SERVER_ERROR,
+            message: "Something went wrong while generating the summary."
+        });
+    } finally {
+        await cleanupFile(extractedAudioPath);
+    }
+});
+
+export {publishVideo , getAllVideos , getVideoById , updateVideo , deleteVideo , togglePublishStatus, summarizeVideo}

@@ -48,4 +48,9 @@ export const videoService = {
   togglePublishStatus: async (videoId) => {
     return apiClient.patch(`/videos/toggle/publish/${videoId}`);
   },
+
+  // Generate AI summary on demand
+  summarizeVideo: async (videoId) => {
+    return apiClient.post(`/videos/${videoId}/summarize`);
+  },
 };
